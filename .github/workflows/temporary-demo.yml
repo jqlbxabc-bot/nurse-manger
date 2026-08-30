@@ -29,6 +29,7 @@ jobs:
       - name: Install application
         shell: bash
         run: |
+          base64 --decode app.zip.b64 > app.zip
           unzip -q app.zip -d app
           python -m pip install --disable-pip-version-check -r app/requirements.txt
 
