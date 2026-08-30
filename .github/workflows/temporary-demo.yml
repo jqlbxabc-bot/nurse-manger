@@ -74,6 +74,18 @@ jobs:
             cat tunnel.log
             exit 1
           fi
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error "$demo_url/healthz" > health.json; then
+              break
+            fi
+            sleep 2
+          done
+          python -c 'import json; data=json.load(open("health.json", encoding="utf-8")); assert data["status"] == "ok" and data["version"] == "11.0.0"'
+          curl --fail --silent --show-error --cookie-jar cookies.txt \
+            --data 'password=gaokao-demo-8766' "$demo_url/cloud-login" > /dev/null
+          curl --fail --silent --show-error --cookie cookies.txt \
+            "$demo_url/api/status" > status.json
+          python -c 'import json; data=json.load(open("status.json", encoding="utf-8")); assert data["provider"] == "deepseek"; assert data["api_key_ready"] is False'
           echo "$demo_url" > LIVE_URL.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
