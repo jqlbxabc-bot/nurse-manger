@@ -1,0 +1,65 @@
+name: Temporary public demo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-public-demo
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Load application package
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install application
+        shell: bash
+        run: |
+          unzip -q app.zip -d app
+          python -m pip install --disable-pip-version-check -r app/requirements.txt
+
+      - name: Start protected demo
+        shell: bash
+        env:
+          AI_PROVIDER: deepseek
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: https://api.deepseek.com
+          DEEPSEEK_MODEL: deepseek-chat
+          CLOUD_ACCESS_PASSWORD: gaokao-demo-8766
+          CLOUD_COOKIE_SECURE: "true"
+          PAYMENT_ENABLED: "false"
+        run: |
+          python -m uvicorn app:app --app-dir app --host 127.0.0.1 --port 8766 > server.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8766/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat server.log
+          exit 1
+
+      - name: Publish temporary URL
+        shell: bash
+        run: |
+          curl -L --fail --silent --show-error \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -o cloudflared
+          chmod +x cloudflared
+          echo "Temporary URL will appear below and remains active while this job runs."
+          ./cloudflared tunnel --url http://127.0.0.1:8766 --no-autoupdate
+
