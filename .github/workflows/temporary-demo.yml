@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: temporary-public-demo
@@ -60,6 +60,26 @@ jobs:
             https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
             -o cloudflared
           chmod +x cloudflared
-          echo "Temporary URL will appear below and remains active while this job runs."
-          ./cloudflared tunnel --url http://127.0.0.1:8766 --no-autoupdate
+          ./cloudflared tunnel --url http://127.0.0.1:8766 --no-autoupdate > tunnel.log 2>&1 &
+          tunnel_pid=$!
+          demo_url=""
+          for attempt in {1..60}; do
+            demo_url=$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' tunnel.log | head -n 1 || true)
+            if [ -n "$demo_url" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$demo_url" ]; then
+            cat tunnel.log
+            exit 1
+          fi
+          echo "$demo_url" > LIVE_URL.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add LIVE_URL.txt
+          git commit -m "Update live demo URL [skip ci]"
+          git push
+          echo "Temporary URL: $demo_url"
+          wait "$tunnel_pid"
 
