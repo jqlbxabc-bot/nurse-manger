@@ -16,6 +16,14 @@ jobs:
   demo:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    env:
+      AI_PROVIDER: deepseek
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: https://api.deepseek.com
+      DEEPSEEK_MODEL: deepseek-chat
+      CLOUD_ACCESS_PASSWORD: gaokao-demo-8766
+      CLOUD_COOKIE_SECURE: "true"
+      PAYMENT_ENABLED: "false"
     steps:
       - name: Load application package
         uses: actions/checkout@v4
@@ -34,14 +42,6 @@ jobs:
 
       - name: Start protected demo
         shell: bash
-        env:
-          AI_PROVIDER: deepseek
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_BASE_URL: https://api.deepseek.com
-          DEEPSEEK_MODEL: deepseek-chat
-          CLOUD_ACCESS_PASSWORD: gaokao-demo-8766
-          CLOUD_COOKIE_SECURE: "true"
-          PAYMENT_ENABLED: "false"
         run: |
           python -m uvicorn app:app --app-dir app --host 127.0.0.1 --port 8766 > server.log 2>&1 &
           for attempt in {1..60}; do
@@ -85,7 +85,10 @@ jobs:
             --data 'password=gaokao-demo-8766' "$demo_url/cloud-login" > /dev/null
           curl --fail --silent --show-error --cookie cookies.txt \
             "$demo_url/api/status" > status.json
-          python -c 'import json; data=json.load(open("status.json", encoding="utf-8")); assert data["provider"] == "deepseek"; assert data["api_key_ready"] is False'
+          python -c 'import json, os; data=json.load(open("status.json", encoding="utf-8")); assert data["provider"] == "deepseek"; assert data["model"] == "deepseek-chat"; assert data["api_key_ready"] == bool(os.getenv("DEEPSEEK_API_KEY", "").strip())'
+          if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+            (cd app && python test_ai_connection.py)
+          fi
           echo "$demo_url" > LIVE_URL.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
